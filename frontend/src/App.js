@@ -50,11 +50,13 @@ function App() {
         const text = await resultResp.text();
         const dataLine = text.split('\n').find(l => l.startsWith('data:'));
         if (!dataLine) throw new Error('No result from API');
-        const [plainLanguage] = JSON.parse(dataLine.slice(5));
+        const jsonStr = dataLine.replace(/^data:\s*/, '');
+        const parsed = JSON.parse(jsonStr);
+        const plainLanguage = Array.isArray(parsed) ? parsed[0] : parsed;
 
         setResult({
           input: inputText,
-          plain_language: plainLanguage,
+          plain_language: plainLanguage || 'No output generated',
           source_annotations: [],
           output_annotations: [],
         });
