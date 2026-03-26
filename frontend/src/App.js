@@ -58,24 +58,58 @@ function App() {
         }
 
         // Parse SSE: find the "data:" line after "event: complete"
-        const lines = fullText.split('\n');
+        const sseLines = fullText.split('\n');
         let plainLanguage = '';
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].startsWith('data:')) {
+        let glossaryMd = '';
+        for (let i = 0; i < sseLines.length; i++) {
+          if (sseLines[i].startsWith('data:')) {
             try {
-              const jsonStr = lines[i].replace(/^data:\s*/, '');
+              const jsonStr = sseLines[i].replace(/^data:\s*/, '');
               const parsed = JSON.parse(jsonStr);
-              plainLanguage = Array.isArray(parsed) ? parsed[0] : parsed;
+              if (Array.isArray(parsed)) {
+                plainLanguage = parsed[0] || '';
+                glossaryMd = parsed[1] || '';
+              }
             } catch (e) {
               // skip malformed lines
             }
           }
         }
 
+        // Parse glossary markdown into annotations
+        const annotations = [];
+        const termRegex = /\*\*(.+?)\*\* -- (.+?)(?:\s{2}|\n)/g;
+        const linkRegex = /\[.*?\]\((.+?)\)/;
+        const blocks = glossaryMd.split('\n\n');
+        for (const block of blocks) {
+          const termMatch = /\*\*(.+?)\*\*\s*--\s*(.+?)(?:\s{2}\n|\n)/.exec(block);
+          if (termMatch) {
+            const term = termMatch[1];
+            const simple = termMatch[2].trim();
+            const urlMatch = linkRegex.exec(block);
+            const url = urlMatch ? urlMatch[1] : '';
+            const summaryMatch = /^>\s*(.+)/m.exec(block);
+            const summary = summaryMatch ? summaryMatch[1].trim() : '';
+            // Find term position in input text
+            const termIdx = inputText.toLowerCase().indexOf(term.toLowerCase());
+            if (termIdx >= 0) {
+              annotations.push({
+                term: inputText.slice(termIdx, termIdx + term.length),
+                simple,
+                start: termIdx,
+                end: termIdx + term.length,
+                url,
+                medlineplus_summary: summary,
+              });
+            }
+          }
+        }
+        annotations.sort((a, b) => a.start - b.start);
+
         setResult({
           input: inputText,
           plain_language: plainLanguage || 'Model is loading, please try again in a moment...',
-          source_annotations: [],
+          source_annotations: annotations,
           output_annotations: [],
         });
       } else {
