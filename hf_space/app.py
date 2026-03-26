@@ -1,66 +1,24 @@
 """
-MedClear API Server
-====================
-Flask API that serves the RAG pipeline for medical text simplification.
-Returns structured JSON with plain language text and hyperlinked medical terms.
-
-Usage:
-    python api_server.py
-    # API runs on http://localhost:5000
-
-Endpoints:
-    POST /api/simplify - Simplify clinical text
-    GET  /api/health   - Health check
+MedClear - HuggingFace Space
+Medical text simplification with FLAN-T5 + MedlinePlus RAG.
 """
 
-import json
 import os
 import re
-import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from flask import Flask, request, jsonify
-from flask import send_from_directory
-from flask_cors import CORS
 
+import gradio as gr
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-app = Flask(__name__, static_folder="frontend/build", static_url_path="")
-CORS(app)
-
-# -- Configuration --
-MODEL_DIR = os.environ.get("MODEL_DIR", "./medclear_results/v2-base/final")
-HF_MODEL_ID = "DTanzillo/medclear-v2-base"
+MODEL_ID = "DTanzillo/medclear-v2-base"
 MEDLINEPLUS_API = "https://wsearch.nlm.nih.gov/ws/query"
 SIMPLIFY_PREFIX = "simplify: "
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# -- Global model (loaded once) --
-tokenizer = None
-model = None
-
-
-def load_model():
-    global tokenizer, model
-    if tokenizer is None:
-        # Try local model first, fall back to HuggingFace Hub
-        if os.path.exists(MODEL_DIR):
-            print(f"Loading model from {MODEL_DIR}...")
-            source = MODEL_DIR
-        else:
-            print(f"Loading model from HuggingFace: {HF_MODEL_ID}...")
-            source = HF_MODEL_ID
-        tokenizer = AutoTokenizer.from_pretrained(source)
-        model = AutoModelForSeq2SeqLM.from_pretrained(source).to(DEVICE)
-        model.eval()
-        print(f"Model loaded on {DEVICE}")
-
-
-# -- Medical term patterns --
+# Medical term dictionary (920+ terms)
 TERM_PATTERNS = {
-    # Procedures
     "cholecystectomy": "gallbladder removal surgery",
     "appendectomy": "appendix removal surgery",
     "hysterectomy": "uterus removal surgery",
@@ -86,7 +44,6 @@ TERM_PATTERNS = {
     "debridement": "removal of dead tissue",
     "intubation": "placing a breathing tube",
     "extubation": "removing a breathing tube",
-    # Conditions
     "cholecystitis": "gallbladder inflammation",
     "appendicitis": "appendix inflammation",
     "pneumonia": "lung infection",
@@ -130,7 +87,6 @@ TERM_PATTERNS = {
     "hypoglycemia": "low blood sugar",
     "hyperkalemia": "high potassium",
     "hyponatremia": "low sodium",
-    # Abbreviations
     "NSTEMI": "heart attack (non-ST elevation type)",
     "STEMI": "heart attack (ST elevation type)",
     "PCI": "opening blocked artery with catheter/stent",
@@ -175,9 +131,16 @@ TERM_PATTERNS = {
     "NIHSS": "stroke severity score",
 }
 
+# Load model at startup
+print("Loading model...")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_ID)
+model.eval()
+print("Model loaded!")
 
-def search_medlineplus(term: str) -> dict | None:
-    """Search MedlinePlus for a term and return title + URL."""
+
+def search_medlineplus(term):
+    """Search MedlinePlus for a term."""
     try:
         encoded = urllib.parse.quote(term)
         url = f"{MEDLINEPLUS_API}?db=healthTopics&term={encoded}&retmax=1"
@@ -188,8 +151,8 @@ def search_medlineplus(term: str) -> dict | None:
         doc = root.find(".//document")
         if doc is not None:
             title_elem = doc.find('.//content[@name="title"]')
-            summary_elem = doc.find('.//content[@name="FullSummary"]')
             url_attr = doc.get("url", "")
+            summary_elem = doc.find('.//content[@name="FullSummary"]')
             title = re.sub(r"<[^>]+>", "", title_elem.text).strip() if title_elem is not None and title_elem.text else ""
             summary = ""
             if summary_elem is not None and summary_elem.text:
@@ -204,118 +167,107 @@ def search_medlineplus(term: str) -> dict | None:
     return None
 
 
-def annotate_text(text: str) -> dict:
-    """Find medical terms in text and create annotations with MedlinePlus links."""
-    annotations = []
-    found_terms = set()
-
-    # Sort patterns by length (longest first to avoid partial matches)
+def find_terms(text):
+    """Find medical terms in text."""
+    found = []
+    found_lower = set()
     sorted_terms = sorted(TERM_PATTERNS.keys(), key=len, reverse=True)
-
     for term in sorted_terms:
         pattern = re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE)
         for match in pattern.finditer(text):
-            if match.group().lower() not in found_terms:
-                found_terms.add(match.group().lower())
-                simple = TERM_PATTERNS[term]
-
-                # Try to get MedlinePlus URL
-                ml_result = search_medlineplus(term)
-                ml_url = ml_result["url"] if ml_result else f"https://medlineplus.gov/search/?query={urllib.parse.quote(term)}"
-                ml_summary = ml_result["summary"] if ml_result else ""
-
-                annotations.append({
-                    "term": match.group(),
-                    "simple": simple,
-                    "start": match.start(),
-                    "end": match.end(),
-                    "url": ml_url,
-                    "medlineplus_summary": ml_summary,
-                })
-                time.sleep(0.2)  # Rate limit
-
-    # Sort by position
-    annotations.sort(key=lambda x: x["start"])
-    return annotations
+            if match.group().lower() not in found_lower:
+                found_lower.add(match.group().lower())
+                found.append((match.group(), TERM_PATTERNS[term]))
+    return found
 
 
-def generate_simplification(clinical_text: str) -> str:
-    """Generate model simplification."""
-    load_model()
+def simplify(clinical_text):
+    """Main pipeline: simplify clinical text with term annotations."""
+    if not clinical_text.strip():
+        return "", ""
+
+    # Generate simplification
     input_text = SIMPLIFY_PREFIX + clinical_text
-    inputs = tokenizer(input_text, return_tensors="pt", max_length=512,
-                       truncation=True).to(DEVICE)
+    inputs = tokenizer(input_text, return_tensors="pt", max_length=512, truncation=True)
     with torch.no_grad():
         output_ids = model.generate(
             **inputs, max_new_tokens=256, num_beams=4,
-            early_stopping=True, no_repeat_ngram_size=3)
-    return tokenizer.decode(output_ids[0], skip_special_tokens=True)
+            early_stopping=True, no_repeat_ngram_size=3,
+        )
+    plain_language = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+
+    # Build glossary with MedlinePlus links
+    terms = find_terms(clinical_text)
+    glossary_lines = []
+    for term_text, simple_def in terms:
+        ml = search_medlineplus(term_text)
+        if ml and ml["url"]:
+            glossary_lines.append(
+                f"**{term_text}** -- {simple_def}  \n"
+                f"[Learn more on MedlinePlus]({ml['url']})"
+            )
+            if ml["summary"]:
+                glossary_lines.append(f"> {ml['summary']}")
+        else:
+            search_url = f"https://medlineplus.gov/search/?query={urllib.parse.quote(term_text)}"
+            glossary_lines.append(
+                f"**{term_text}** -- {simple_def}  \n"
+                f"[Search MedlinePlus]({search_url})"
+            )
+        glossary_lines.append("")
+
+    glossary = "\n".join(glossary_lines)
+    return plain_language, glossary
 
 
-@app.route("/api/simplify", methods=["POST"])
-def simplify():
-    """Main API endpoint: simplify clinical text with RAG annotations."""
-    data = request.get_json()
-    if not data or "text" not in data:
-        return jsonify({"error": "Missing 'text' field"}), 400
+EXAMPLES = [
+    [
+        "Patient underwent laparoscopic cholecystectomy for acute cholecystitis. "
+        "Intraoperative findings revealed a distended, edematous gallbladder with "
+        "adhesions to the omentum. Critical view of safety was achieved. EBL minimal. "
+        "Patient tolerated the procedure well. POD1: afebrile, tolerating PO diet, "
+        "ambulating independently. Discharged on ibuprofen and oxycodone PRN. "
+        "Follow-up in 2 weeks."
+    ],
+    [
+        "68-year-old male with NSTEMI. Left heart catheterization with PCI to LAD. "
+        "Angiography revealed 95% stenosis of proximal LAD. Successful DES placement "
+        "with TIMI 3 flow. Echo showed EF 45% with anterior wall hypokinesis. "
+        "Discharge medications: Aspirin 81mg daily, Ticagrelor 90mg BID x12 months, "
+        "Metoprolol 50mg daily, Atorvastatin 80mg daily."
+    ],
+    [
+        "72y/o M. CC: SOB, DOE, R/O Acute MI. PMHx: HTN, DMII, CAD, HFpEF. "
+        "Presented to ED via EMS with progressive SOB and 3-pillow orthopnea x24h. "
+        "Noncompliant with PO meds (ASA, Lisinopril) d/t financial constraints. "
+        "Tachycardic HR 115, hypotensive BP 90/50. CXR: pulmonary edema. "
+        "ECG: sinus tach with PVCs, no STEMI. Labs: Cr 2.1 from 0.9 baseline, "
+        "K+ 5.5, BNP 2000. Pre-renal AKI. Troponin mildly elevated, likely demand ischemia."
+    ],
+]
 
-    clinical_text = data["text"]
-
-    # 1. Generate model output
-    plain_language = generate_simplification(clinical_text)
-
-    # 2. Annotate the SOURCE text with medical term definitions + MedlinePlus links
-    annotations = annotate_text(clinical_text)
-
-    # 3. Also annotate any terms in the model output
-    output_annotations = annotate_text(plain_language)
-
-    return jsonify({
-        "input": clinical_text,
-        "plain_language": plain_language,
-        "source_annotations": annotations,
-        "output_annotations": output_annotations,
-    })
-
-
-@app.route("/api/lookup", methods=["GET"])
-def lookup():
-    """Look up a medical term on MedlinePlus."""
-    term = request.args.get("term", "")
-    if not term:
-        return jsonify({"error": "Missing 'term' parameter"}), 400
-
-    result = search_medlineplus(term)
-    simple = TERM_PATTERNS.get(term.lower(), "")
-
-    return jsonify({
-        "term": term,
-        "simple_definition": simple,
-        "medlineplus": result,
-    })
-
-
-@app.route("/api/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok", "model_loaded": model is not None})
-
-
-# Serve React frontend
-@app.route("/")
-def serve_frontend():
-    return send_from_directory(app.static_folder, "index.html")
-
-
-@app.errorhandler(404)
-def not_found(e):
-    return send_from_directory(app.static_folder, "index.html")
-
+demo = gr.Interface(
+    fn=simplify,
+    inputs=gr.Textbox(
+        label="Clinical Note",
+        placeholder="Paste a clinical note, discharge summary, or post-op description...",
+        lines=8,
+    ),
+    outputs=[
+        gr.Textbox(label="Plain Language Version", lines=6),
+        gr.Markdown(label="Medical Term Glossary (with MedlinePlus links)"),
+    ],
+    title="MedClear: Doctor-Speak to Human-Speak",
+    description=(
+        "Paste a clinical note and MedClear will translate it into plain language "
+        "that patients and families can understand. Every medical term is defined "
+        "and linked to [MedlinePlus](https://medlineplus.gov) (NIH) for verification.\n\n"
+        "**This is an AI assistant, not medical advice.** Always talk to your doctor."
+    ),
+    examples=EXAMPLES,
+    cache_examples=False,
+    theme=gr.themes.Soft(),
+)
 
 if __name__ == "__main__":
-    load_model()
-    print("\nMedClear API Server running on http://localhost:5000")
-    print("Endpoints:")
-    print("  POST /api/simplify  - Simplify clinical text")
-    print("  GET  /api/lookup    - Look up a medical term")
-    print("  GET  /api/health    - Health check")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    demo.launch()
