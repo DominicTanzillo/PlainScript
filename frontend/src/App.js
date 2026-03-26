@@ -5,21 +5,21 @@ const API_BASE = process.env.REACT_APP_API_URL || '';
 
 const EXAMPLE_NOTES = [
   {
-    name: "Post-Op Cholecystectomy",
+    name: "Appendectomy",
+    text: "22-year-old male presenting with RLQ pain, nausea, and low-grade fever x12 hours. CT abdomen showed acute appendicitis with no perforation. Underwent uncomplicated laparoscopic appendectomy. EBL less than 10mL. POD0: tolerating clear liquids, pain controlled with IV Tylenol. Discharged POD1 on PO antibiotics x5 days and ibuprofen PRN."
+  },
+  {
+    name: "Gallbladder Surgery",
     text: "Patient underwent laparoscopic cholecystectomy for acute cholecystitis. Intraoperative findings revealed a distended, edematous gallbladder with adhesions to the omentum. Critical view of safety was achieved. EBL minimal. Patient tolerated the procedure well. POD1: afebrile, tolerating PO diet, ambulating independently. Discharged on ibuprofen and oxycodone PRN. Follow-up in 2 weeks."
   },
   {
-    name: "Cardiac Catheterization",
-    text: "68-year-old male with NSTEMI. Left heart catheterization with PCI to LAD. Angiography revealed 95% stenosis of proximal LAD. Successful DES placement with TIMI 3 flow. Echo showed EF 45% with anterior wall hypokinesis. Discharge medications: Aspirin 81mg daily, Ticagrelor 90mg BID x12 months, Metoprolol 50mg daily, Atorvastatin 80mg daily."
+    name: "Cataract Surgery",
+    text: "72-year-old female with visually significant bilateral cataracts. Underwent right phacoemulsification with posterior chamber IOL implant under topical anesthesia. No complications. Visual acuity improved from 20/200 to 20/40 on POD1. Prescribed prednisolone drops QID x4 weeks and moxifloxacin drops QID x1 week. Left eye scheduled in 2 weeks."
   },
   {
-    name: "Total Knee Replacement",
-    text: "71-year-old female with severe tricompartmental osteoarthritis right knee. Right total knee arthroplasty under spinal anesthesia. Cemented posterior-stabilized implant. EBL 250mL. DVT prophylaxis enoxaparin 40mg SQ daily. PT initiated POD0, ambulating 150 feet with walker. ROM 0-90 degrees."
+    name: "Dog Bite",
+    text: "35-year-old male bitten by neighbor's dog on right hand. Two puncture wounds over dorsal hand, no tendon involvement, full ROM intact. X-ray negative for fracture or foreign body. Wound irrigated copiously. Not sutured due to bite wound infection risk. Started on augmentin 875mg BID x7 days. Tetanus booster given. Wound check in 48 hours. Report filed with animal control."
   },
-  {
-    name: "ER Admission (Heart Failure)",
-    text: "72y/o M. CC: SOB, DOE, R/O Acute MI. PMHx: HTN, DMII, CAD, HFpEF. Presented to ED via EMS with progressive SOB and 3-pillow orthopnea x24h. Noncompliant with PO meds (ASA, Lisinopril) d/t financial constraints. Tachycardic HR 115, hypotensive BP 90/50. CXR: pulmonary edema. ECG: sinus tach with PVCs, no STEMI. Labs: Cr 2.1 from 0.9 baseline, K+ 5.5, BNP 2000. Pre-renal AKI. Troponin mildly elevated, likely demand ischemia."
-  }
 ];
 
 function App() {

@@ -176,6 +176,68 @@ TERM_PATTERNS = {
 }
 
 
+# Curated MedlinePlus URLs for abbreviations that don't search well
+TERM_URLS = {
+    "PO": "https://medlineplus.gov/ency/article/002023.htm",
+    "PRN": "https://medlineplus.gov/ency/article/002023.htm",
+    "NPO": "https://medlineplus.gov/ency/article/002023.htm",
+    "IV": "https://medlineplus.gov/ency/article/003423.htm",
+    "IM": "https://medlineplus.gov/ency/article/003423.htm",
+    "SQ": "https://medlineplus.gov/ency/article/003423.htm",
+    "BID": "https://medlineplus.gov/ency/article/002023.htm",
+    "TID": "https://medlineplus.gov/ency/article/002023.htm",
+    "QID": "https://medlineplus.gov/ency/article/002023.htm",
+    "QHS": "https://medlineplus.gov/ency/article/002023.htm",
+    "DVT": "https://medlineplus.gov/deepveinthrombosis.html",
+    "PE": "https://medlineplus.gov/pulmonaryembolism.html",
+    "COPD": "https://medlineplus.gov/copd.html",
+    "CHF": "https://medlineplus.gov/heartfailure.html",
+    "CKD": "https://medlineplus.gov/chronickidneydisease.html",
+    "CVA": "https://medlineplus.gov/stroke.html",
+    "TIA": "https://medlineplus.gov/transientischemicattack.html",
+    "AKI": "https://medlineplus.gov/ency/article/000501.htm",
+    "DKA": "https://medlineplus.gov/ency/article/000320.htm",
+    "NSTEMI": "https://medlineplus.gov/heartattack.html",
+    "STEMI": "https://medlineplus.gov/heartattack.html",
+    "CABG": "https://medlineplus.gov/coronaryarterybypasssurgery.html",
+    "PCI": "https://medlineplus.gov/angioplasty.html",
+    "EF": "https://medlineplus.gov/ency/article/003757.htm",
+    "ICU": "https://medlineplus.gov/criticalcare.html",
+    "PT": "https://medlineplus.gov/ency/article/001942.htm",
+    "OT": "https://medlineplus.gov/ency/article/007455.htm",
+    "CBC": "https://medlineplus.gov/lab-tests/complete-blood-count-cbc/",
+    "BMI": "https://medlineplus.gov/ency/article/007196.htm",
+    "INR": "https://medlineplus.gov/lab-tests/prothrombin-time-test-and-inr-ptinr/",
+    "A1C": "https://medlineplus.gov/a1c.html",
+    "EBL": "https://medlineplus.gov/bleeding.html",
+    "ROM": "https://medlineplus.gov/ency/article/003165.htm",
+    "POD": "https://medlineplus.gov/surgery.html",
+    "ARDS": "https://medlineplus.gov/ency/article/000103.htm",
+    "ESRD": "https://medlineplus.gov/kidneyfailure.html",
+    "GCS": "https://medlineplus.gov/coma.html",
+    "BMP": "https://medlineplus.gov/lab-tests/basic-metabolic-panel-bmp/",
+    "CRP": "https://medlineplus.gov/lab-tests/c-reactive-protein-crp-test/",
+    "ESR": "https://medlineplus.gov/lab-tests/erythrocyte-sedimentation-rate-esr/",
+    "DES": "https://medlineplus.gov/angioplasty.html",
+    "NIHSS": "https://medlineplus.gov/stroke.html",
+    # Conditions (longer names that search well but lets be safe)
+    "cholecystectomy": "https://medlineplus.gov/gallbladderdiseases.html",
+    "appendectomy": "https://medlineplus.gov/appendicitis.html",
+    "hysterectomy": "https://medlineplus.gov/hysterectomy.html",
+    "arthroplasty": "https://medlineplus.gov/jointreplacement.html",
+    "colonoscopy": "https://medlineplus.gov/colonoscopy.html",
+    "pneumonia": "https://medlineplus.gov/pneumonia.html",
+    "sepsis": "https://medlineplus.gov/sepsis.html",
+    "hypertension": "https://medlineplus.gov/highbloodpressure.html",
+    "atrial fibrillation": "https://medlineplus.gov/atrialfibrillation.html",
+    "anemia": "https://medlineplus.gov/anemia.html",
+    "edema": "https://medlineplus.gov/edema.html",
+    "syncope": "https://medlineplus.gov/fainting.html",
+    "biopsy": "https://medlineplus.gov/biopsy.html",
+    "catheterization": "https://medlineplus.gov/cardiaccatheterization.html",
+}
+
+
 def search_medlineplus(term: str) -> dict | None:
     """Search MedlinePlus for a term and return title + URL."""
     try:
@@ -219,10 +281,17 @@ def annotate_text(text: str) -> dict:
                 found_terms.add(match.group().lower())
                 simple = TERM_PATTERNS[term]
 
-                # Try to get MedlinePlus URL
-                ml_result = search_medlineplus(term)
-                ml_url = ml_result["url"] if ml_result else f"https://medlineplus.gov/search/?query={urllib.parse.quote(term)}"
-                ml_summary = ml_result["summary"] if ml_result else ""
+                # Use curated URL if available, otherwise search API
+                if term.upper() in TERM_URLS:
+                    ml_url = TERM_URLS[term.upper()]
+                    ml_summary = ""
+                elif term.lower() in TERM_URLS:
+                    ml_url = TERM_URLS[term.lower()]
+                    ml_summary = ""
+                else:
+                    ml_result = search_medlineplus(term)
+                    ml_url = ml_result["url"] if ml_result else f"https://medlineplus.gov/search/?query={urllib.parse.quote(term)}"
+                    ml_summary = ml_result["summary"] if ml_result else ""
 
                 annotations.append({
                     "term": match.group(),

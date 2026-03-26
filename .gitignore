@@ -16,6 +16,12 @@ frontend/build/
 .DS_Store
 Thumbs.db
 
+# Presentation (local only)
+presentation/
+
+# Test scripts
+test_20_cases.py
+
 # Environment
 .env
 *.egg-info/

@@ -18,12 +18,16 @@
 
 MedClear is an AI tool that translates doctor-speak into human-speak. Paste in a discharge summary, post-op note, or visit summary, and MedClear will:
 
-1. **Extract key facts** from the clinical note
+1. **Generate a patient-friendly version** using a fine-tuned FLAN-T5 model
 2. **Look up definitions** on [MedlinePlus](https://medlineplus.gov) (NIH's plain-language health resource)
-3. **Generate a patient-friendly version** of the text
-4. **Hyperlink every medical term** so patients can click to learn more
+3. **Hyperlink every medical term** so patients can click to learn more
+4. **Build a glossary** of all terms found in the note
 
 Think of it as Google Translate, but instead of English to Spanish, it's *Physician to Patient*.
+
+**Live demo:** [huggingface.co/spaces/DTanzillo/medclear](https://huggingface.co/spaces/DTanzillo/medclear)
+
+**Model:** [huggingface.co/DTanzillo/medclear-v2-base](https://huggingface.co/DTanzillo/medclear-v2-base)
 
 ---
 
@@ -44,13 +48,13 @@ Every patient deserves to understand what happened to them. Every parent deserve
 Doctor's Note (the alphabet soup)
         |
         v
-[Term Extraction]  ───>  [MedlinePlus API]  ───>  Definitions + Links
+[Term Extraction]  --->  [MedlinePlus API]  --->  Definitions + Links
    920+ terms              (NIH/NLM)                SOB = shortness of breath
         |                                           (not what you're thinking)
         v
-[FLAN-T5-large + LoRA]  ───>  Plain Language Translation
-   783M params                 Trained on 23K examples
-   0.6% fine-tuned             50% term/phrase vocabulary
+[FLAN-T5-base]  --->  Plain Language Translation
+   248M params          Trained on 23K examples
+   Full fine-tune       50% term/phrase vocabulary
         |
         v
     React Web App
@@ -59,11 +63,11 @@ Doctor's Note (the alphabet soup)
 
 ### The Three-Layer Approach
 
-**Layer 1 -- Vocabulary (the foundation):** 920+ medical terms mapped to plain English definitions. The model learns that `"cholecystectomy"` = `"surgery to remove the gallbladder"` before it tries to simplify an entire surgical report.
+**Layer 1 -- Vocabulary (the foundation):** 920+ medical terms mapped to plain English definitions with curated MedlinePlus URLs. The model learns that `"cholecystectomy"` = `"surgery to remove the gallbladder"` before it tries to simplify an entire surgical report.
 
-**Layer 2 -- RAG with MedlinePlus:** Every medical term is looked up on [MedlinePlus](https://medlineplus.gov) (NIH's authoritative patient health resource). Definitions are injected as context at inference time, grounding the output in verified medical information.
+**Layer 2 -- RAG with MedlinePlus:** Every medical term is looked up on [MedlinePlus](https://medlineplus.gov) (NIH's authoritative patient health resource). Definitions and links are provided alongside the simplified text so patients can verify.
 
-**Layer 3 -- Generation:** FLAN-T5-large fine-tuned with LoRA adapters generates the simplified text, having learned from 23,157 training examples spanning terms, phrases, sentences, and full clinical documents.
+**Layer 3 -- Generation:** FLAN-T5-base fine-tuned on 23,157 training examples spanning terms, phrases, sentences, and full clinical documents. The model generates the simplified text, and the RAG layer provides accuracy.
 
 ---
 
@@ -72,22 +76,30 @@ Doctor's Note (the alphabet soup)
 ```bash
 cd PlainScript
 
-# Start the API server (loads model + MedlinePlus RAG)
+# Start the API server (loads model + serves React build)
 python api_server.py
 
-# In another terminal, start the React frontend
-cd frontend && npm start
-
-# Open http://localhost:3000
+# Open http://localhost:5000
 ```
 
-Or run the pipeline directly:
+For development:
 ```bash
-# Train the model (V2 LoRA BF16)
-python train_v2_lora_bf16.py
+# Start the React dev server (hot reload)
+cd frontend && npm start
+# Opens http://localhost:3000 (proxies API to :5000)
+```
 
-# Run the RAG pipeline on a clinical note
-python rag_pipeline.py --demo
+Or use the model directly:
+```python
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+tokenizer = AutoTokenizer.from_pretrained("DTanzillo/medclear-v2-base")
+model = AutoModelForSeq2SeqLM.from_pretrained("DTanzillo/medclear-v2-base")
+
+text = "simplify: Patient underwent laparoscopic cholecystectomy. EBL minimal. Afebrile, tolerating PO diet."
+inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
+outputs = model.generate(**inputs, max_new_tokens=256, num_beams=4)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
 
 ---
@@ -133,11 +145,11 @@ V2 dedicates 50.3% of training to terms + phrases. The model learns the **mappin
 
 | Component | Choice | Why |
 |-----------|--------|-----|
-| Base model | FLAN-T5-large (783M) | Encoder-decoder for translation, instruction-tuned, fits on CPU |
-| Fine-tuning | LoRA (rank 16) | 0.6% params trained, preserves pre-trained knowledge, stable |
-| Precision | BF16 | 20x faster than FP32, native RTX 40-series support |
-| Retrieval | MedlinePlus API | Free, authoritative, plain-language, hyperlinked |
-| Frontend | React + Flask | Clickable term annotations, hover tooltips |
+| Base model | FLAN-T5-base (248M) | Encoder-decoder for translation, instruction-tuned, fits on CPU |
+| Fine-tuning | Full fine-tune | Best quality at this scale, trains in 18 minutes |
+| Precision | BF16 | 20x faster than FP32, required for T5 (FP16 causes NaN) |
+| Retrieval | MedlinePlus API + curated URLs | Free, authoritative, plain-language, hyperlinked |
+| Frontend | React + Flask | Clickable term annotations, hover tooltips, glossary |
 
 ### Why Not Just Use GPT-4 / Claude?
 
@@ -149,17 +161,18 @@ V2 dedicates 50.3% of training to terms + phrases. The model learns the **mappin
 
 ---
 
-## Results (T5-base, Academic Evaluation)
+## Results
 
-| Metric | Raw FLAN-T5 | MedClear (best) |
-|--------|-------------|-----------------|
+| Metric | Raw FLAN-T5 | MedClear V2 |
+|--------|-------------|-------------|
 | ROUGE-1 F1 | 0.13 | **0.36** |
 | ROUGE-2 F1 | 0.05 | **0.13** |
 | ROUGE-L F1 | 0.10 | **0.22** |
 | Flesch-Kincaid Grade | 15.7 | **13.9** |
 | Flesch Reading Ease | 9.9 | **34.4** |
+| Eval Loss | -- | **1.712** |
 
-T5-large V2 LoRA results pending (training in progress).
+Training completed in **18 minutes** on RTX 4070 Ti Super (3 epochs, 23K examples, BF16).
 
 ---
 
@@ -172,7 +185,7 @@ T5-large V2 LoRA results pending (training in progress).
 | 3 | T5-base full FT | + CoT format | Learned structure, still hallucinated | Small models lack capacity for reasoning |
 | 4 | T5-large full FT | Same data | Gibberish output | Full FT of large models is unstable |
 | 5 | T5-large LoRA FP32 | Paragraph-heavy | 19 hours, poor output | FP32 too slow, data too paragraph-heavy |
-| **6** | **T5-large LoRA BF16** | **23K V2 (50% terms)** | **Training...** | **Vocabulary first, 20x faster** |
+| **6** | **T5-base full FT** | **23K V2 (50% terms)** | **Eval loss 1.712** | **Vocabulary first, best results** |
 
 ---
 
@@ -185,6 +198,7 @@ T5-large V2 LoRA results pending (training in progress).
 - Training data reflects English-speaking medical professionals' assumptions about "plain language."
 - **This is not a replacement for talking to your doctor.** It's a starting point for understanding.
 - All medical terms link to MedlinePlus (NIH) for authoritative verification.
+- The model excels at surgical/procedural notes but struggles with complex multi-system medical cases.
 
 ---
 
@@ -196,7 +210,7 @@ T5-large V2 LoRA results pending (training in progress).
 
 ## Built With
 
-FLAN-T5 | LoRA/PEFT | MedlinePlus (NIH) | PyTorch | Transformers | React | Flask
+FLAN-T5 | MedlinePlus (NIH) | PyTorch | Transformers | React | Flask
 
 See [METHODS.md](METHODS.md) for full technical documentation.
 
