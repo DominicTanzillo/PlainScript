@@ -37,7 +37,7 @@ function App() {
 
     try {
       if (API_BASE && API_BASE.includes('hf.space')) {
-        // HuggingFace Space: use Gradio API
+        // HuggingFace Space: use Gradio API (SSE call pattern)
         const callResp = await fetch(`${API_BASE}/gradio_api/call/simplify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -46,17 +46,35 @@ function App() {
         if (!callResp.ok) throw new Error('API error: ' + callResp.status);
         const { event_id } = await callResp.json();
 
+        // Read the SSE stream
         const resultResp = await fetch(`${API_BASE}/gradio_api/call/simplify/${event_id}`);
-        const text = await resultResp.text();
-        const dataLine = text.split('\n').find(l => l.startsWith('data:'));
-        if (!dataLine) throw new Error('No result from API');
-        const jsonStr = dataLine.replace(/^data:\s*/, '');
-        const parsed = JSON.parse(jsonStr);
-        const plainLanguage = Array.isArray(parsed) ? parsed[0] : parsed;
+        const reader = resultResp.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullText += decoder.decode(value, { stream: true });
+        }
+
+        // Parse SSE: find the "data:" line after "event: complete"
+        const lines = fullText.split('\n');
+        let plainLanguage = '';
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith('data:')) {
+            try {
+              const jsonStr = lines[i].replace(/^data:\s*/, '');
+              const parsed = JSON.parse(jsonStr);
+              plainLanguage = Array.isArray(parsed) ? parsed[0] : parsed;
+            } catch (e) {
+              // skip malformed lines
+            }
+          }
+        }
 
         setResult({
           input: inputText,
-          plain_language: plainLanguage || 'No output generated',
+          plain_language: plainLanguage || 'Model is loading, please try again in a moment...',
           source_annotations: [],
           output_annotations: [],
         });
