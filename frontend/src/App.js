@@ -78,7 +78,6 @@ function App() {
 
         // Parse glossary markdown into annotations
         const annotations = [];
-        const termRegex = /\*\*(.+?)\*\* -- (.+?)(?:\s{2}|\n)/g;
         const linkRegex = /\[.*?\]\((.+?)\)/;
         const blocks = glossaryMd.split('\n\n');
         for (const block of blocks) {
