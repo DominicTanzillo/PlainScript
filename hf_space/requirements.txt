@@ -1,5 +1,3 @@
 torch
 transformers
 gradio
-flask
-flask-cors

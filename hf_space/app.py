@@ -269,25 +269,25 @@ demo = gr.Interface(
     theme=gr.themes.Soft(),
 )
 
-# Mount a Flask API so the React frontend can call /api/simplify
+# Add REST API routes via FastAPI (Gradio's underlying server)
 import json
-from flask import Flask, request as flask_request, jsonify
-from flask_cors import CORS
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-flask_app = Flask(__name__)
-CORS(flask_app)
+app = gr.routes.App.create_app(demo)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-@flask_app.route("/api/simplify", methods=["POST"])
-def api_simplify():
-    data = flask_request.get_json()
+@app.post("/api/simplify")
+async def api_simplify(request: Request):
+    data = await request.json()
     if not data or "text" not in data:
-        return jsonify({"error": "Missing 'text' field"}), 400
+        return JSONResponse({"error": "Missing 'text' field"}, status_code=400)
 
     clinical_text = data["text"]
     plain_language, _ = simplify(clinical_text)
 
-    # Build structured annotations for React frontend
     terms = find_terms(clinical_text)
     annotations = []
     for term_text, simple_def in terms:
@@ -307,7 +307,7 @@ def api_simplify():
             })
 
     annotations.sort(key=lambda x: x["start"])
-    return jsonify({
+    return JSONResponse({
         "input": clinical_text,
         "plain_language": plain_language,
         "source_annotations": annotations,
@@ -315,13 +315,10 @@ def api_simplify():
     })
 
 
-@flask_app.route("/api/health", methods=["GET"])
-def api_health():
-    return jsonify({"status": "ok", "model_loaded": True})
+@app.get("/api/health")
+async def api_health():
+    return JSONResponse({"status": "ok", "model_loaded": True})
 
-
-# Mount Flask app inside Gradio
-demo = gr.mount_gradio_app(flask_app, demo, path="/")
 
 if __name__ == "__main__":
-    flask_app.run(host="0.0.0.0", port=7860)
+    demo.launch()
