@@ -269,5 +269,59 @@ demo = gr.Interface(
     theme=gr.themes.Soft(),
 )
 
+# Mount a Flask API so the React frontend can call /api/simplify
+import json
+from flask import Flask, request as flask_request, jsonify
+from flask_cors import CORS
+
+flask_app = Flask(__name__)
+CORS(flask_app)
+
+
+@flask_app.route("/api/simplify", methods=["POST"])
+def api_simplify():
+    data = flask_request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "Missing 'text' field"}), 400
+
+    clinical_text = data["text"]
+    plain_language, _ = simplify(clinical_text)
+
+    # Build structured annotations for React frontend
+    terms = find_terms(clinical_text)
+    annotations = []
+    for term_text, simple_def in terms:
+        pattern = re.compile(r'\b' + re.escape(term_text) + r'\b', re.IGNORECASE)
+        match = pattern.search(clinical_text)
+        if match:
+            ml = search_medlineplus(term_text)
+            ml_url = ml["url"] if ml else f"https://medlineplus.gov/search/?query={urllib.parse.quote(term_text)}"
+            ml_summary = ml["summary"] if ml else ""
+            annotations.append({
+                "term": match.group(),
+                "simple": simple_def,
+                "start": match.start(),
+                "end": match.end(),
+                "url": ml_url,
+                "medlineplus_summary": ml_summary,
+            })
+
+    annotations.sort(key=lambda x: x["start"])
+    return jsonify({
+        "input": clinical_text,
+        "plain_language": plain_language,
+        "source_annotations": annotations,
+        "output_annotations": [],
+    })
+
+
+@flask_app.route("/api/health", methods=["GET"])
+def api_health():
+    return jsonify({"status": "ok", "model_loaded": True})
+
+
+# Mount Flask app inside Gradio
+demo = gr.mount_gradio_app(flask_app, demo, path="/")
+
 if __name__ == "__main__":
-    demo.launch()
+    flask_app.run(host="0.0.0.0", port=7860)

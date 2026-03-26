@@ -1,26 +1,49 @@
 # Data and model outputs (large files)
 medclear_results/
+
+# Python
 __pycache__/
 *.pyc
+
+# IDE
 .idea/
 
-# Batch generation scripts (60+ files, bulk synthetic data generators)
+# Legacy scripts (kept locally for reference, not in repo)
 batch_gen_*.py
 append_synthetic.py
+cochrane_plainlang_finetune.py
+medclear_finetune.py
+train_large_lora.py
+train_v2_lora_bf16.py
+convert_to_cot.py
+convert_to_cot_v2.py
+bulk_simplify.py
+generate_synthetic.py
+chunk_academic_data.py
+create_aligned_data.py
+create_rag_training_data.py
+additional_medical_terms.py
+extra_phrases.py
+extra_terms.py
+setup.sh
+PITCH_PLAN.md
+PROJECT_PLAN.md
+METHODS.md
 
-# Node modules
-frontend/node_modules/
-frontend/build/
-
-# OS files
-.DS_Store
-Thumbs.db
+# Test scripts (local only)
+test_20_cases.py
+test_find_winners.py
 
 # Presentation (local only)
 presentation/
 
-# Test scripts
-test_20_cases.py
+# Node
+frontend/node_modules/
+frontend/build/
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Environment
 .env

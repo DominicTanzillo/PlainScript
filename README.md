@@ -14,82 +14,95 @@
 
 ---
 
+## Try It
+
+**Live Demo (Gradio):** [huggingface.co/spaces/DTanzillo/medclear](https://huggingface.co/spaces/DTanzillo/medclear)
+
+**Web App (GitHub Pages):** [dominictanzillo.github.io/PlainScript](https://dominictanzillo.github.io/PlainScript)
+
+**Model on HuggingFace:** [huggingface.co/DTanzillo/medclear-v2-base](https://huggingface.co/DTanzillo/medclear-v2-base)
+
+---
+
 ## What Is This?
 
-MedClear is an AI tool that translates doctor-speak into human-speak. Paste in a discharge summary, post-op note, or visit summary, and MedClear will:
+MedClear translates doctor-speak into human-speak. Paste in a discharge summary, post-op note, or visit summary, and MedClear will:
 
 1. **Generate a patient-friendly version** using a fine-tuned FLAN-T5 model
-2. **Look up definitions** on [MedlinePlus](https://medlineplus.gov) (NIH's plain-language health resource)
-3. **Hyperlink every medical term** so patients can click to learn more
-4. **Build a glossary** of all terms found in the note
+2. **Identify every medical term** from a dictionary of 920+ terms
+3. **Link each term to MedlinePlus** (NIH) for authoritative definitions
+4. **Build an interactive glossary** with hover tooltips and click-through links
 
 Think of it as Google Translate, but instead of English to Spanish, it's *Physician to Patient*.
 
-**Live demo:** [huggingface.co/spaces/DTanzillo/medclear](https://huggingface.co/spaces/DTanzillo/medclear)
-
-**Model:** [huggingface.co/DTanzillo/medclear-v2-base](https://huggingface.co/DTanzillo/medclear-v2-base)
-
 ---
 
-## The Problem (It's Bigger Than You Think)
-
-- **~36% of US adults** have limited health literacy
-- The average discharge summary reads at a **college level** (Flesch-Kincaid grade 15+)
-- Patient materials should be at **6th-8th grade level**
-- That 72-year-old man? He couldn't afford his meds. He *definitely* can't afford to misunderstand his diagnosis.
-
-Every patient deserves to understand what happened to them. Every parent deserves to understand their kid's surgery. Every person deserves to know what "noncompliance with PO meds due to financial constraints" actually means -- *he couldn't pay for his pills.*
-
----
-
-## How It Works
+## Architecture
 
 ```
-Doctor's Note (the alphabet soup)
-        |
-        v
-[Term Extraction]  --->  [MedlinePlus API]  --->  Definitions + Links
-   920+ terms              (NIH/NLM)                SOB = shortness of breath
-        |                                           (not what you're thinking)
-        v
-[FLAN-T5-base]  --->  Plain Language Translation
-   248M params          Trained on 23K examples
-   Full fine-tune       50% term/phrase vocabulary
-        |
-        v
-    React Web App
-    Clickable terms | Hover tooltips | MedlinePlus glossary
+                           +-------------------+
+                           |   React Frontend  |
+                           |  (GitHub Pages)   |
+                           +--------+----------+
+                                    |
+                              POST /api/simplify
+                                    |
+                           +--------v----------+
+                           |   Flask API Server |
+                           |   (api_server.py)  |
+                           +--------+----------+
+                                    |
+                     +--------------+--------------+
+                     |              |              |
+              +------v------+ +----v-----+ +------v-------+
+              |  FLAN-T5    | |  Term    | |  MedlinePlus |
+              |  base       | |  Dict    | |  API (NIH)   |
+              |  (248M)     | |  920+    | |              |
+              +------+------+ +----+-----+ +------+-------+
+                     |              |              |
+                     v              v              v
+              Plain language   Term matches   Definitions
+              simplification   with positions  + URLs
+                     |              |              |
+                     +--------------+--------------+
+                                    |
+                           +--------v----------+
+                           |   JSON Response   |
+                           | plain_language     |
+                           | source_annotations |
+                           | output_annotations |
+                           +-------------------+
 ```
 
 ### The Three-Layer Approach
 
-**Layer 1 -- Vocabulary (the foundation):** 920+ medical terms mapped to plain English definitions with curated MedlinePlus URLs. The model learns that `"cholecystectomy"` = `"surgery to remove the gallbladder"` before it tries to simplify an entire surgical report.
+**Layer 1 -- Vocabulary:** 920+ medical terms mapped to plain English with curated MedlinePlus URLs. Abbreviations like PO, PRN, DVT, NSTEMI all link to the correct NIH page.
 
-**Layer 2 -- RAG with MedlinePlus:** Every medical term is looked up on [MedlinePlus](https://medlineplus.gov) (NIH's authoritative patient health resource). Definitions and links are provided alongside the simplified text so patients can verify.
+**Layer 2 -- RAG with MedlinePlus:** The [MedlinePlus API](https://medlineplus.gov) (NIH/NLM) provides authoritative definitions at inference time. Every term the model encounters gets a verified definition and link.
 
-**Layer 3 -- Generation:** FLAN-T5-base fine-tuned on 23,157 training examples spanning terms, phrases, sentences, and full clinical documents. The model generates the simplified text, and the RAG layer provides accuracy.
+**Layer 3 -- Generation:** FLAN-T5-base fine-tuned on 23,157 training examples generates the simplified text. 50% of training is term/phrase level -- the model learns vocabulary first, then composition.
 
 ---
 
-## Quick Start
+## Running Locally
 
 ```bash
+git clone https://github.com/DominicTanzillo/PlainScript.git
 cd PlainScript
 
-# Start the API server (loads model + serves React build)
+# Install dependencies
+pip install flask flask-cors torch transformers
+
+# Start the server (loads model from HuggingFace, serves React app)
 python api_server.py
 
 # Open http://localhost:5000
 ```
 
-For development:
-```bash
-# Start the React dev server (hot reload)
-cd frontend && npm start
-# Opens http://localhost:3000 (proxies API to :5000)
-```
+The server automatically downloads the model from HuggingFace on first run (~950MB).
 
-Or use the model directly:
+### Using the Model Directly
+
 ```python
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
@@ -104,60 +117,20 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
 ---
 
-## Data Augmentation Strategy
+## Training Data (23,157 examples)
 
 The key insight: **teach the vocabulary first, composition second.**
 
-Rather than training on full paragraph pairs (where the model must simultaneously learn jargon AND generate coherent output), we built a multi-granularity dataset weighted toward short, precise translations:
-
-### Training Data (23,157 examples)
-
 | Level | Examples | % | What It Teaches |
 |-------|----------|---|-----------------|
-| **Terms** | 4,989 | 21.5% | `"DVT"` -> `"a blood clot in a deep vein, usually in the leg"` |
-| **Phrases** | 6,660 | 28.8% | `"afebrile, tolerating PO"` -> `"no fever, eating and drinking normally"` |
-| Sentences | 8,000 | 34.5% | Sentence-level simplification from aligned academic pairs |
+| **Terms** | 4,989 | 21.5% | `"DVT"` -> `"a blood clot in a deep vein"` |
+| **Phrases** | 6,660 | 28.8% | `"afebrile, tolerating PO"` -> `"no fever, eating normally"` |
+| Sentences | 8,000 | 34.5% | Sentence-level simplification |
 | Flashcards | 2,689 | 11.6% | Medical knowledge Q&A |
 | Paragraphs | 574 | 2.5% | Full clinical note simplification |
-| RAG-augmented | 245 | 1.1% | Using MedlinePlus context |
+| RAG-augmented | 245 | 1.1% | MedlinePlus context-injected |
 
-### Data Sources
-
-| Source | Raw Pairs | How We Used It |
-|--------|-----------|---------------|
-| Cochrane (GEM) | 3,568 | Paragraph pairs + 20,678 sentence chunks + 467 extracted terms |
-| PLABA (OSF) | 635 | Paragraph pairs + 8,028 sentence chunks + 141 terms |
-| Med-EASi (HuggingFace) | 1,397 | Already sentence-level, used directly |
-| Synthetic Clinical (Claude) | 626 | 155 specialties, discharge/surgery/ER notes |
-| Medical Flashcards | 33,955 | 3,000 selected "What is X?" definitions |
-| Term Dictionary | 920 | Hand-written + agent-generated + extracted |
-| MedlinePlus RAG | 270 | Context-injected training pairs |
-
-### Why Multi-Granularity Works
-
-Previous approaches trained on full paragraphs. The model had to learn vocabulary, abbreviations, AND coherent generation simultaneously. Results: hallucination, Cochrane-style "We found..." leaking into clinical output.
-
-V2 dedicates 50.3% of training to terms + phrases. The model learns the **mapping** first (`"EBL minimal"` = `"very little blood loss"`), then learns to compose these mappings into sentences and paragraphs.
-
----
-
-## Model Architecture
-
-| Component | Choice | Why |
-|-----------|--------|-----|
-| Base model | FLAN-T5-base (248M) | Encoder-decoder for translation, instruction-tuned, fits on CPU |
-| Fine-tuning | Full fine-tune | Best quality at this scale, trains in 18 minutes |
-| Precision | BF16 | 20x faster than FP32, required for T5 (FP16 causes NaN) |
-| Retrieval | MedlinePlus API + curated URLs | Free, authoritative, plain-language, hyperlinked |
-| Frontend | React + Flask | Clickable term annotations, hover tooltips, glossary |
-
-### Why Not Just Use GPT-4 / Claude?
-
-1. **Cost**: API calls for every patient document at scale = expensive
-2. **Privacy**: Clinical notes contain PHI; can't send to external APIs without HIPAA compliance
-3. **Latency**: Local model = instant; API = network round-trip
-4. **Deployment**: Runs on HuggingFace Spaces free tier (CPU, ~3.5GB RAM)
-5. **Reproducibility**: Open weights, open training data, open methodology
+**Sources:** Cochrane (GEM), PLABA, Med-EASi, 626 synthetic clinical pairs (155 specialties), 920-term medical dictionary, MedlinePlus RAG pairs.
 
 ---
 
@@ -172,33 +145,69 @@ V2 dedicates 50.3% of training to terms + phrases. The model learns the **mappin
 | Flesch Reading Ease | 9.9 | **34.4** |
 | Eval Loss | -- | **1.712** |
 
-Training completed in **18 minutes** on RTX 4070 Ti Super (3 epochs, 23K examples, BF16).
+Trained in **18 minutes** on RTX 4070 Ti Super (3 epochs, BF16).
 
 ---
 
-## Training Iterations & What We Learned
+## HuggingFace Deployment
 
-| # | Model | Data | Result | Lesson |
-|---|-------|------|--------|--------|
-| 1 | T5-base full FT | Academic only | ROUGE 0.36, Cochrane style leaks | Data distribution > model size |
-| 2 | T5-base full FT | + 541 synthetic | Slight improvement | Small domain data helps |
-| 3 | T5-base full FT | + CoT format | Learned structure, still hallucinated | Small models lack capacity for reasoning |
-| 4 | T5-large full FT | Same data | Gibberish output | Full FT of large models is unstable |
-| 5 | T5-large LoRA FP32 | Paragraph-heavy | 19 hours, poor output | FP32 too slow, data too paragraph-heavy |
-| **6** | **T5-base full FT** | **23K V2 (50% terms)** | **Eval loss 1.712** | **Vocabulary first, best results** |
+The model and demo are hosted on HuggingFace:
+
+- **Model:** [`DTanzillo/medclear-v2-base`](https://huggingface.co/DTanzillo/medclear-v2-base) -- FLAN-T5-base (248M params), ~950MB
+- **Space:** [`DTanzillo/medclear`](https://huggingface.co/spaces/DTanzillo/medclear) -- Gradio demo with MedlinePlus RAG
+
+The Space runs on HuggingFace's free CPU tier (~16GB RAM). The Gradio app (`hf_space/app.py`) loads the model, runs simplification, and builds a MedlinePlus glossary for every input.
+
+To update the Space:
+```bash
+# Files are in hf_space/
+# Push via HuggingFace Hub or git
+cd hf_space
+# Edit app.py or requirements.txt
+# Upload with: huggingface-cli upload DTanzillo/medclear . --repo-type space
+```
 
 ---
 
-## Ethics & Honest Limitations
+## Project Structure
+
+```
+PlainScript/
+  api_server.py              # Flask API + React static server
+  rag_pipeline.py            # MedlinePlus RAG pipeline
+  train_v2_base.py           # V2 training script (the winning config)
+  build_training_data_v2.py  # Multi-granularity data builder
+  build_final_training_data.py  # Final dataset assembly
+  frontend/
+    src/App.js               # React app (term highlighting, tooltips)
+    src/App.css              # Styles
+    public/index.html        # HTML shell
+  hf_space/
+    app.py                   # Gradio app for HuggingFace Spaces
+    requirements.txt         # Space dependencies
+```
+
+---
+
+## Why Not Just Use GPT-4 / Claude?
+
+1. **Cost**: API calls for every patient document at scale = expensive
+2. **Privacy**: Clinical notes contain PHI; can't send to external APIs
+3. **Latency**: Local model = instant; API = network round-trip
+4. **Deployment**: Runs on HuggingFace free tier (CPU, ~3.5GB RAM)
+5. **Reproducibility**: Open weights, open data, open methodology
+
+---
+
+## Ethics & Limitations
 
 **This tool is an assistant, not an authority.**
 
 - The model can hallucinate medical facts. Every output should be verified.
-- ROUGE measures word overlap, not patient comprehension.
-- Training data reflects English-speaking medical professionals' assumptions about "plain language."
-- **This is not a replacement for talking to your doctor.** It's a starting point for understanding.
-- All medical terms link to MedlinePlus (NIH) for authoritative verification.
-- The model excels at surgical/procedural notes but struggles with complex multi-system medical cases.
+- Excels at surgical/procedural notes; struggles with complex multi-system cases.
+- Training data reflects English-speaking assumptions about "plain language."
+- **Not a replacement for talking to your doctor.** A starting point for understanding.
+- All terms link to MedlinePlus (NIH) for authoritative verification.
 
 ---
 
@@ -211,7 +220,5 @@ Training completed in **18 minutes** on RTX 4070 Ti Super (3 epochs, 23K example
 ## Built With
 
 FLAN-T5 | MedlinePlus (NIH) | PyTorch | Transformers | React | Flask
-
-See [METHODS.md](METHODS.md) for full technical documentation.
 
 **Duke University Hackathon 2026**
