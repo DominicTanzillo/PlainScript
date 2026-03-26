@@ -1,0 +1,21 @@
+# Data and model outputs (large files)
+medclear_results/
+__pycache__/
+*.pyc
+.idea/
+
+# Batch generation scripts (60+ files, bulk synthetic data generators)
+batch_gen_*.py
+append_synthetic.py
+
+# Node modules
+frontend/node_modules/
+frontend/build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.egg-info/
