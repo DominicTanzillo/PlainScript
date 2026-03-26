@@ -36,14 +36,39 @@ function App() {
     setResult(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/simplify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText }),
-      });
-      if (!response.ok) throw new Error('API error: ' + response.status);
-      const data = await response.json();
-      setResult(data);
+      if (API_BASE && API_BASE.includes('hf.space')) {
+        // HuggingFace Space: use Gradio API
+        const callResp = await fetch(`${API_BASE}/gradio_api/call/simplify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: [inputText] }),
+        });
+        if (!callResp.ok) throw new Error('API error: ' + callResp.status);
+        const { event_id } = await callResp.json();
+
+        const resultResp = await fetch(`${API_BASE}/gradio_api/call/simplify/${event_id}`);
+        const text = await resultResp.text();
+        const dataLine = text.split('\n').find(l => l.startsWith('data:'));
+        if (!dataLine) throw new Error('No result from API');
+        const [plainLanguage] = JSON.parse(dataLine.slice(5));
+
+        setResult({
+          input: inputText,
+          plain_language: plainLanguage,
+          source_annotations: [],
+          output_annotations: [],
+        });
+      } else {
+        // Local Flask server
+        const response = await fetch(`${API_BASE}/api/simplify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: inputText }),
+        });
+        if (!response.ok) throw new Error('API error: ' + response.status);
+        const data = await response.json();
+        setResult(data);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
