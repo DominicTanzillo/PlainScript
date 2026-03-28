@@ -35,6 +35,10 @@ test_20_cases.py
 test_find_winners.py
 test_v3_20cases.py
 test_v25_20cases.py
+test_v2_50cases.py
+test_v2_round2.py
+find_winners.py
+find_winners_r3.py
 
 # V2.5/V3 experiment scripts (local only)
 assemble_v25_dataset.py

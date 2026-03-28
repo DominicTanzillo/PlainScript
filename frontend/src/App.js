@@ -23,6 +23,22 @@ const EXAMPLE_NOTES = [
   {
     name: "Abscess I&D",
     text: "35-year-old male with 3cm fluctuant abscess on right buttock x5 days. Incision and drainage performed under local anesthesia. 15mL of purulent material expressed. Wound packed with iodoform gauze. Culture sent. Prescribed TMP-SMX 160/800mg BID x7 days. Packing removal in 48 hours. Daily wound care with repacking. Follow-up in 1 week."
+  },
+  {
+    name: "Chalazion Drainage",
+    text: "45-year-old male with persistent right upper eyelid chalazion x3 months, failed warm compresses. Incision and curettage performed under local anesthesia from the inner eyelid approach. Granulomatous material removed. Antibiotic-steroid ointment applied. Warm compresses QID x2 weeks. Follow-up in 2 weeks."
+  },
+  {
+    name: "Dupuytren Release",
+    text: "62-year-old male with Dupuytren contracture of right ring finger, unable to fully extend. Needle aponeurotomy performed in office under local anesthesia. Cord disrupted. Finger achieved full extension. Bandaid applied. ROM exercises immediately. May recur. Hand therapy referral. Follow-up in 4 weeks."
+  },
+  {
+    name: "Ear Piercing Infection",
+    text: "16-year-old female with infected right ear piercing x5 days. Erythema, swelling, and purulent discharge around earring. No abscess. Earring removed. Wound cleaned with saline. Mupirocin ointment TID x7 days. Warm compresses QID. May re-pierce in 6 weeks after full healing. Return if worsening or fever."
+  },
+  {
+    name: "Tongue Laceration",
+    text: "8-year-old male with 1.5cm tongue laceration after biting tongue during fall. Actively bleeding. Repaired with 3 absorbable sutures under local anesthesia. Hemostasis achieved. Soft diet x5 days. Saltwater rinses after meals. Sutures dissolve in 7-10 days. Acetaminophen for pain. Return if excessive bleeding or signs of infection."
   }
 ];
 
