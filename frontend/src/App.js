@@ -20,6 +20,10 @@ const EXAMPLE_NOTES = [
     name: "Dog Bite",
     text: "35-year-old male bitten by neighbor's dog on right hand. Two puncture wounds over dorsal hand, no tendon involvement, full ROM intact. X-ray negative for fracture or foreign body. Wound irrigated copiously. Not sutured due to bite wound infection risk. Started on augmentin 875mg BID x7 days. Tetanus booster given. Wound check in 48 hours. Report filed with animal control."
   },
+  {
+    name: "Abscess I&D",
+    text: "35-year-old male with 3cm fluctuant abscess on right buttock x5 days. Incision and drainage performed under local anesthesia. 15mL of purulent material expressed. Wound packed with iodoform gauze. Culture sent. Prescribed TMP-SMX 160/800mg BID x7 days. Packing removal in 48 hours. Daily wound care with repacking. Follow-up in 1 week."
+  }
 ];
 
 function App() {
@@ -145,9 +149,13 @@ function App() {
             setTooltip({ ...ann, x: rect.left, y: rect.bottom + window.scrollY });
           }}
           onMouseLeave={() => setTooltip(null)}>
-          <a href={ann.url} target="_blank" rel="noopener noreferrer" className="term-link">
-            {text.slice(ann.start, ann.end)}
-          </a>
+          {ann.url ? (
+            <a href={ann.url} target="_blank" rel="noopener noreferrer" className="term-link">
+              {text.slice(ann.start, ann.end)}
+            </a>
+          ) : (
+            <span className="term-link term-no-link">{text.slice(ann.start, ann.end)}</span>
+          )}
         </span>
       );
       lastEnd = ann.end;
@@ -220,9 +228,13 @@ function App() {
               <div className="glossary-grid">
                 {result.source_annotations.map((ann, i) => (
                   <div key={i} className="glossary-item">
-                    <a href={ann.url} target="_blank" rel="noopener noreferrer" className="glossary-term">
-                      {ann.term}
-                    </a>
+                    {ann.url ? (
+                      <a href={ann.url} target="_blank" rel="noopener noreferrer" className="glossary-term">
+                        {ann.term}
+                      </a>
+                    ) : (
+                      <span className="glossary-term">{ann.term}</span>
+                    )}
                     <span className="glossary-def">{ann.simple}</span>
                     {ann.medlineplus_summary && (
                       <p className="glossary-summary">{ann.medlineplus_summary}</p>

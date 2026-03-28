@@ -85,7 +85,13 @@ TERM_PATTERNS = {
     "topical anesthesia": "numbing medication applied to the skin surface",
     "unilateral": "on one side only",
     "visual acuity": "sharpness of vision (e.g., 20/20 is normal)",
+    "abscess": "a pocket of pus from an infection",
     "acute": "sudden and severe",
+    "fluctuant": "soft and fluid-filled (when pressed)",
+    "I&D": "incision and drainage (cutting open and draining an infection)",
+    "iodoform": "an antiseptic gauze used to pack wounds",
+    "purulent": "containing pus",
+    "TMP-SMX": "a combination antibiotic (Bactrim/Septra)",
     "LLQ": "left lower quadrant (lower left area of the abdomen)",
     "LUQ": "left upper quadrant (upper left area of the abdomen)",
     "RUQ": "right upper quadrant (upper right area of the abdomen)",
@@ -389,7 +395,7 @@ TERM_URLS = {
     "PO": "https://medlineplus.gov/ency/article/002023.htm",
     "PRN": "https://medlineplus.gov/ency/article/002023.htm",
     "NPO": "https://medlineplus.gov/ency/article/002023.htm",
-    "IV": "https://medlineplus.gov/ency/patientinstructions/000551.htm",
+    "IV": "",  # no good standalone MedlinePlus page for "intravenous"
     "IM": "https://medlineplus.gov/ency/article/003423.htm",
     "SQ": "https://medlineplus.gov/ency/article/003423.htm",
     "BID": "https://medlineplus.gov/ency/article/002023.htm",
@@ -418,7 +424,7 @@ TERM_URLS = {
     "INR": "https://medlineplus.gov/lab-tests/prothrombin-time-test-and-inr-ptinr/",
     "A1C": "https://medlineplus.gov/a1c.html",
     "EBL": "https://medlineplus.gov/bleeding.html",
-    "ROM": "https://medlineplus.gov/ency/article/003165.htm",
+    "ROM": "",  # no good MedlinePlus page for range of motion
     "POD": "https://medlineplus.gov/surgery.html",
     "ARDS": "https://medlineplus.gov/ency/article/000103.htm",
     "ESRD": "https://medlineplus.gov/kidneyfailure.html",
@@ -434,7 +440,27 @@ TERM_URLS = {
     "oxycodone": "https://medlineplus.gov/druginfo/meds/a682132.html",
     "prednisolone": "https://medlineplus.gov/druginfo/meds/a615042.html",
     "tetanus": "https://medlineplus.gov/tetanus.html",
+    "abscess": "https://medlineplus.gov/abscess.html",
+    # Terms with no good MedlinePlus page (definition only, no link)
+    "acute": "",
+    "afebrile": "",
+    "ambulating": "",
+    "bilateral": "",
+    "distension": "",
+    "dorsal": "",
+    "fluctuant": "",
+    "intraoperative": "",
+    "iodoform": "",
+    "irrigation": "",
+    "omentum": "",
+    "purulent": "",
+    "tendon": "",
+    "topical anesthesia": "",
+    "unilateral": "",
+    "ventral": "",
+    "visual acuity": "",
     "augmentin": "https://medlineplus.gov/druginfo/meds/a685024.html",
+    "TMP-SMX": "https://medlineplus.gov/druginfo/meds/a684025.html",
     "moxifloxacin": "https://medlineplus.gov/druginfo/meds/a604003.html",
     "cataract": "https://medlineplus.gov/cataract.html",
     "fracture": "https://medlineplus.gov/fractures.html",
@@ -596,16 +622,17 @@ def annotate_text(text: str) -> dict:
             # Look up URL: curated first, then API search on canonical term
             url_key_upper = canonical_term.upper()
             url_key_lower = canonical_term.lower()
+            ml_url = ""
+            ml_summary = ""
             if url_key_upper in TERM_URLS:
                 ml_url = TERM_URLS[url_key_upper]
-                ml_summary = ""
             elif url_key_lower in TERM_URLS:
                 ml_url = TERM_URLS[url_key_lower]
-                ml_summary = ""
             else:
                 ml_result = search_medlineplus(canonical_term)
-                ml_url = ml_result["url"] if ml_result else ""
-                ml_summary = ml_result["summary"] if ml_result else ""
+                if ml_result and ml_result.get("url"):
+                    ml_url = ml_result["url"]
+                    ml_summary = ml_result.get("summary", "")
 
             annotations.append({
                 "term": matched_text,

@@ -275,6 +275,12 @@ body {
   text-decoration-style: solid;
 }
 
+.term-no-link {
+  cursor: default;
+  text-decoration-style: dotted;
+  color: #5f6368;
+}
+
 /* Tooltip */
 .tooltip {
   position: absolute;
