@@ -36,6 +36,7 @@ jobs:
         working-directory: frontend
         env:
           REACT_APP_API_URL: https://dtanzillo-medclear.hf.space
+          PUBLIC_URL: /PlainScript
         run: npm run build
 
       - name: Setup Pages
