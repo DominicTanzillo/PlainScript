@@ -163,7 +163,7 @@ function App() {
         <p className="tagline">Doctor-Speak to Human-Speak</p>
         <p className="subtitle">
           Paste a clinical note below and get a plain-language version your family can understand.
-          Every medical term is defined and linked to <a href="https://medlineplus.gov" target="_blank" rel="noopener noreferrer">MedlinePlus</a> (NIH).
+          Medical terms are defined and linked to <a href="https://medlineplus.gov" target="_blank" rel="noopener noreferrer">MedlinePlus</a> (NIH) where available.
         </p>
       </header>
 

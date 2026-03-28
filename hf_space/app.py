@@ -19,6 +19,32 @@ SIMPLIFY_PREFIX = "simplify: "
 
 # Medical term dictionary (920+ terms)
 TERM_PATTERNS = {
+    # === Terms from the 4 demo cases (must all resolve) ===
+    "afebrile": "no fever",
+    "augmentin": "an antibiotic (amoxicillin/clavulanate)",
+    "bilateral": "on both sides",
+    "cataract": "clouding of the lens in the eye",
+    "distension": "swelling or bloating",
+    "dorsal": "the back side (of the hand, foot, etc.)",
+    "fracture": "a broken bone",
+    "ibuprofen": "an over-the-counter anti-inflammatory pain reliever",
+    "intraoperative": "during surgery",
+    "IOL": "intraocular lens (artificial lens implant for the eye)",
+    "irrigation": "flushing a wound with fluid to clean it",
+    "laparoscopic": "minimally invasive surgery using small incisions and a camera",
+    "moxifloxacin": "an antibiotic eye drop",
+    "omentum": "a fatty tissue layer that covers organs in the abdomen",
+    "oxycodone": "a prescription opioid pain medication",
+    "perforation": "a hole or tear in an organ wall",
+    "phacoemulsification": "cataract removal surgery using ultrasound",
+    "prednisolone": "a steroid medication to reduce inflammation",
+    "RLQ": "right lower quadrant (lower right area of the abdomen)",
+    "tendon": "a strong cord connecting muscle to bone",
+    "tetanus": "a serious bacterial infection; a booster shot prevents it",
+    "topical anesthesia": "numbing medication applied to the skin surface",
+    "unilateral": "on one side only",
+    "visual acuity": "sharpness of vision (e.g., 20/20 is normal)",
+    # === Standard terms ===
     "A1C": "3-month blood sugar average",
     "ABG": "arterial blood gas test",
     "ACL": "anterior cruciate ligament (knee)",
