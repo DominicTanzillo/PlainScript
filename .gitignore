@@ -33,6 +33,23 @@ METHODS.md
 # Test scripts (local only)
 test_20_cases.py
 test_find_winners.py
+test_v3_20cases.py
+test_v25_20cases.py
+
+# V2.5/V3 experiment scripts (local only)
+assemble_v25_dataset.py
+assemble_v3_dataset.py
+download_asclepius.py
+download_liliya.py
+downsample_chv.py
+generate_chv_pairs.py
+generate_v3_synthetic.py
+merge_terms.py
+parse_medquad.py
+resume_v25.py
+scrape_drug_pairs.py
+train_v25_base.py
+train_v3_base.py
 
 # Presentation (local only)
 presentation/

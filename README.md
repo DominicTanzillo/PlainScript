@@ -29,7 +29,7 @@
 MedClear translates doctor-speak into human-speak. Paste in a discharge summary, post-op note, or visit summary, and MedClear will:
 
 1. **Generate a patient-friendly version** using a fine-tuned FLAN-T5 model
-2. **Identify every medical term** from a dictionary of 920+ terms
+2. **Identify every medical term** from a dictionary of 289 curated terms
 3. **Link each term to MedlinePlus** (NIH) for authoritative definitions
 4. **Build an interactive glossary** with hover tooltips and click-through links
 
@@ -57,7 +57,7 @@ Think of it as Google Translate, but instead of English to Spanish, it's *Physic
               +------v------+ +----v-----+ +------v-------+
               |  FLAN-T5    | |  Term    | |  MedlinePlus |
               |  base       | |  Dict    | |  API (NIH)   |
-              |  (248M)     | |  920+    | |              |
+              |  (248M)     | |  289     | |              |
               +------+------+ +----+-----+ +------+-------+
                      |              |              |
                      v              v              v
@@ -76,7 +76,7 @@ Think of it as Google Translate, but instead of English to Spanish, it's *Physic
 
 ### The Three-Layer Approach
 
-**Layer 1 -- Vocabulary:** 920+ medical terms mapped to plain English with curated MedlinePlus URLs. Abbreviations like PO, PRN, DVT, NSTEMI all link to the correct NIH page.
+**Layer 1 -- Vocabulary:** 289 medical terms mapped to plain English with curated MedlinePlus URLs. Covers procedures, conditions, abbreviations, labs, vitals, and medications (sourced from MedlinePlus, ASHA, RCOG).
 
 **Layer 2 -- RAG with MedlinePlus:** The [MedlinePlus API](https://medlineplus.gov) (NIH/NLM) provides authoritative definitions at inference time. Every term the model encounters gets a verified definition and link.
 
@@ -149,6 +149,27 @@ Trained in **18 minutes** on RTX 4070 Ti Super (3 epochs, BF16).
 
 ---
 
+## Training Iterations & What We Learned
+
+| # | Model | Data | Eval Loss | Outcome |
+|---|-------|------|-----------|---------|
+| 1 | T5-base full FT | Academic only | 2.61 | Cochrane-style leaking into output |
+| 2 | T5-base + synth | + 541 pairs | 2.55 | Slight improvement |
+| 3 | T5-base + CoT | + CoT format | 2.48 | Still hallucinated, 248M too small for CoT |
+| 4 | T5-large full FT | Same data | -- | Gibberish (unstable) |
+| 5 | T5-large LoRA | Paragraph-heavy | 5.20 | 19hr train, degenerate loops |
+| **6** | **T5-base V2** | **23K (50% terms)** | **1.71** | **Best simplification quality** |
+| 7 | T5-base V2.5 | 36K (+CHV/MedQuAD) | 1.69 | More data != better simplification |
+| 8 | T5-base V3 | 87K (+Asclepius) | 1.28 | Lowest loss but paraphrased instead of simplifying |
+
+**Key lessons:**
+- **Data quality >> data quantity.** 23K curated pairs (V2) beat 87K mixed pairs (V3).
+- **Summarization != simplification.** Asclepius data taught the model to reorganize clinical text, not translate it to plain language.
+- **Lower eval loss != better output.** V3 had 25% lower loss than V2 but produced objectively worse simplification.
+- **BF16 is mandatory for T5.** FP16 causes NaN losses. BF16 is 20x faster than FP32.
+
+---
+
 ## HuggingFace Deployment
 
 The model and demo are hosted on HuggingFace:
@@ -213,7 +234,7 @@ PlainScript/
 
 ## The Pitch
 
-*"When that 72-year-old man's family gets handed a discharge summary full of acronyms they've never seen, they shouldn't need a medical degree to understand it. MedClear shows that with 23,000 training examples, a medical vocabulary of 920 terms, and a connection to the National Library of Medicine, we can meaningfully shift clinical communication from physician to patient -- one simplified paragraph at a time."*
+*"When that 72-year-old man's family gets handed a discharge summary full of acronyms they've never seen, they shouldn't need a medical degree to understand it. MedClear shows that with 23,000 training examples, a 289-term medical dictionary, and a connection to the National Library of Medicine, we can meaningfully shift clinical communication from physician to patient -- one simplified paragraph at a time."*
 
 ---
 
