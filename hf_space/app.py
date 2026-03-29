@@ -396,17 +396,123 @@ def search_medlineplus(term):
     return None
 
 
+# Lemma map: variant forms -> canonical term
+LEMMA_MAP = {
+    "edematous": "edema", "oedema": "edema", "oedematous": "edema",
+    "cataracts": "cataract", "adhesions": "adhesion",
+    "hemorrhaging": "hemorrhage", "hemorrhagic": "hemorrhage", "haemorrhage": "hemorrhage",
+    "anaemia": "anemia", "anemic": "anemia",
+    "tachycardic": "tachycardia", "bradycardic": "bradycardia",
+    "hypotensive": "hypotension", "hypertensive": "hypertension",
+    "stenotic": "stenosis", "thrombotic": "thrombosis",
+    "distended": "distension", "sutured": "sutures", "suturing": "sutures",
+    "intubated": "intubation", "extubated": "extubation",
+    "perforation": "perforation", "perforated": "perforation",
+    "irrigated": "irrigation", "unilateral": "unilateral", "bilateral": "bilateral",
+    "ambulatory": "ambulating", "ambulation": "ambulating",
+    "erythematous": "erythema", "ischemic": "ischemia", "necrotic": "necrosis",
+    "syncopal": "syncope", "embolic": "embolism", "dyspneic": "dyspnea",
+}
+
+# Short uppercase abbreviations that are also common English words
+CASE_SENSITIVE_ABBREVS = {"OR", "PT", "IM", "DO", "ER", "BP", "HR", "CC", "DC"}
+
+# Curated URLs (empty string = definition only, no link)
+TERM_URLS = {
+    "PO": "", "PRN": "", "NPO": "", "IV": "", "IM": "", "SQ": "",
+    "BID": "", "TID": "", "QID": "", "QHS": "",
+    "DVT": "https://medlineplus.gov/deepveinthrombosis.html",
+    "PE": "https://medlineplus.gov/pulmonaryembolism.html",
+    "COPD": "https://medlineplus.gov/copd.html",
+    "CHF": "https://medlineplus.gov/heartfailure.html",
+    "CKD": "https://medlineplus.gov/chronickidneydisease.html",
+    "CVA": "https://medlineplus.gov/stroke.html",
+    "TIA": "https://medlineplus.gov/transientischemicattack.html",
+    "CABG": "https://medlineplus.gov/coronaryarterybypasssurgery.html",
+    "PCI": "https://medlineplus.gov/angioplasty.html",
+    "ICU": "https://medlineplus.gov/criticalcare.html",
+    "CBC": "https://medlineplus.gov/lab-tests/complete-blood-count-cbc/",
+    "INR": "https://medlineplus.gov/lab-tests/prothrombin-time-test-and-inr-ptinr/",
+    "A1C": "https://medlineplus.gov/a1c.html",
+    "laparoscopic": "https://medlineplus.gov/ency/article/007016.htm",
+    "ibuprofen": "https://medlineplus.gov/druginfo/meds/a682159.html",
+    "oxycodone": "https://medlineplus.gov/druginfo/meds/a682132.html",
+    "prednisolone": "https://medlineplus.gov/druginfo/meds/a615042.html",
+    "tetanus": "https://medlineplus.gov/tetanus.html",
+    "augmentin": "https://medlineplus.gov/druginfo/meds/a685024.html",
+    "moxifloxacin": "https://medlineplus.gov/druginfo/meds/a604003.html",
+    "cataract": "https://medlineplus.gov/cataract.html",
+    "fracture": "https://medlineplus.gov/fractures.html",
+    "abscess": "https://medlineplus.gov/abscess.html",
+    "TMP-SMX": "https://medlineplus.gov/druginfo/meds/a684025.html",
+    "cholecystectomy": "https://medlineplus.gov/gallbladderdiseases.html",
+    "appendectomy": "https://medlineplus.gov/appendicitis.html",
+    "pneumonia": "https://medlineplus.gov/pneumonia.html",
+    "sepsis": "https://medlineplus.gov/sepsis.html",
+    "edema": "https://medlineplus.gov/edema.html",
+    # Definition-only terms (no good MedlinePlus page)
+    "acute": "", "afebrile": "", "ambulating": "", "bilateral": "",
+    "distension": "", "dorsal": "", "fluctuant": "", "intraoperative": "",
+    "iodoform": "", "irrigation": "", "omentum": "", "purulent": "",
+    "tendon": "", "topical anesthesia": "", "unilateral": "", "ventral": "",
+    "visual acuity": "", "ROM": "", "EBL": "", "POD": "",
+    "erythema": "", "hemostasis": "", "laceration": "", "chalazion": "",
+    "contracture": "", "curettage": "", "Dupuytren": "", "granulomatous": "",
+    "mupirocin": "", "paronychia": "", "acetaminophen": "", "aponeurotomy": "",
+}
+
+
+def _build_term_pattern(term):
+    """Build regex with proper boundary logic."""
+    escaped = re.escape(term)
+    is_short = len(term) <= 3 and term.isupper()
+    if term == "POD":
+        return re.compile(r'(?<![A-Za-z])POD\s*\d+(?![A-Za-z])|(?<![A-Za-z])POD(?![A-Za-z0-9])')
+    elif is_short and term in CASE_SENSITIVE_ABBREVS:
+        return re.compile(r'(?<![A-Za-z])' + escaped + r'(?![A-Za-z])')
+    elif is_short:
+        return re.compile(r'(?<![A-Za-z])' + escaped + r'(?![A-Za-z])', re.IGNORECASE)
+    else:
+        return re.compile(r'\b' + escaped + r'\b', re.IGNORECASE)
+
+
 def find_terms(text):
-    """Find medical terms in text."""
+    """Find medical terms in text with proper boundaries and lemma support."""
     found = []
     found_lower = set()
-    sorted_terms = sorted(TERM_PATTERNS.keys(), key=len, reverse=True)
-    for term in sorted_terms:
-        pattern = re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE)
+    covered = set()
+
+    all_terms = []
+    for term in TERM_PATTERNS:
+        all_terms.append((term, term, _build_term_pattern(term)))
+    for variant, canonical in LEMMA_MAP.items():
+        if canonical in TERM_PATTERNS and variant.lower() not in (t.lower() for t in TERM_PATTERNS):
+            all_terms.append((variant, canonical, _build_term_pattern(variant)))
+
+    all_terms.sort(key=lambda x: len(x[0]), reverse=True)
+
+    for display_term, canonical_term, pattern in all_terms:
         for match in pattern.finditer(text):
-            if match.group().lower() not in found_lower:
-                found_lower.add(match.group().lower())
-                found.append((match.group(), TERM_PATTERNS[term]))
+            match_positions = set(range(match.start(), match.end()))
+            if match_positions & covered:
+                continue
+            term_key = canonical_term.lower()
+            if term_key in found_lower:
+                continue
+            found_lower.add(term_key)
+            covered.update(match_positions)
+
+            simple = TERM_PATTERNS[canonical_term]
+            # Get URL
+            url = ""
+            if canonical_term.upper() in TERM_URLS:
+                url = TERM_URLS[canonical_term.upper()]
+            elif canonical_term.lower() in TERM_URLS:
+                url = TERM_URLS[canonical_term.lower()]
+            elif canonical_term in TERM_URLS:
+                url = TERM_URLS[canonical_term]
+
+            found.append((match.group(), simple, url))
     return found
 
 
@@ -425,24 +531,19 @@ def simplify(clinical_text):
         )
     plain_language = tokenizer.decode(output_ids[0], skip_special_tokens=True)
 
-    # Build glossary with MedlinePlus links
+    # Build glossary - use curated URLs, skip API for terms with empty URLs
     terms = find_terms(clinical_text)
     glossary_lines = []
-    for term_text, simple_def in terms:
-        ml = search_medlineplus(term_text)
-        if ml and ml["url"]:
+    for term_text, simple_def, curated_url in terms:
+        if curated_url:
+            # Has a curated MedlinePlus link
             glossary_lines.append(
                 f"**{term_text}** -- {simple_def}  \n"
-                f"[Learn more on MedlinePlus]({ml['url']})"
+                f"[Learn more on MedlinePlus]({curated_url})"
             )
-            if ml["summary"]:
-                glossary_lines.append(f"> {ml['summary']}")
         else:
-            search_url = f"https://medlineplus.gov/search/?query={urllib.parse.quote(term_text)}"
-            glossary_lines.append(
-                f"**{term_text}** -- {simple_def}  \n"
-                f"[Search MedlinePlus]({search_url})"
-            )
+            # Definition only, no link
+            glossary_lines.append(f"**{term_text}** -- {simple_def}")
         glossary_lines.append("")
 
     glossary = "\n".join(glossary_lines)
@@ -519,20 +620,17 @@ async def api_simplify(request: Request):
 
     terms = find_terms(clinical_text)
     annotations = []
-    for term_text, simple_def in terms:
-        pattern = re.compile(r'\b' + re.escape(term_text) + r'\b', re.IGNORECASE)
+    for term_text, simple_def, curated_url in terms:
+        pattern = _build_term_pattern(term_text)
         match = pattern.search(clinical_text)
         if match:
-            ml = search_medlineplus(term_text)
-            ml_url = ml["url"] if ml else f"https://medlineplus.gov/search/?query={urllib.parse.quote(term_text)}"
-            ml_summary = ml["summary"] if ml else ""
             annotations.append({
                 "term": match.group(),
                 "simple": simple_def,
                 "start": match.start(),
                 "end": match.end(),
-                "url": ml_url,
-                "medlineplus_summary": ml_summary,
+                "url": curated_url,
+                "medlineplus_summary": "",
             })
 
     annotations.sort(key=lambda x: x["start"])
