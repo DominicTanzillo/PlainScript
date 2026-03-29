@@ -106,7 +106,7 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1 className="logo">MedClear</h1>
+        <h1 className="logo">PlainScript</h1>
         <p className="tagline">Doctor-Speak to Human-Speak</p>
         <p className="subtitle">
           Paste a clinical note below and get a plain-language version your family can understand.
