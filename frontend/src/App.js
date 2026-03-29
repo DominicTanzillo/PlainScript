@@ -110,21 +110,31 @@ function App() {
             const url = urlMatch ? urlMatch[1] : '';
             const summaryMatch = /^>\s*(.+)/m.exec(block);
             const summary = summaryMatch ? summaryMatch[1].trim() : '';
-            // Find term in input text
+            // Find term in input text, skipping covered positions
             const inputLower = inputText.toLowerCase();
             const termLower = term.toLowerCase();
-            let termIdx = inputLower.indexOf(termLower);
-            if (termIdx >= 0) {
-              let endIdx = termIdx + term.length;
-              // Skip if this position is already covered
-              if (covered.has(termIdx)) continue;
-              // Mark positions as covered
+            let searchFrom = 0;
+            let placed = false;
+            while (!placed && searchFrom < inputLower.length) {
+              const termIdx = inputLower.indexOf(termLower, searchFrom);
+              if (termIdx < 0) break;
+              const endIdx = termIdx + term.length;
+              // Skip if overlaps with already-covered positions
+              let overlaps = false;
+              for (let p = termIdx; p < endIdx; p++) {
+                if (covered.has(p)) { overlaps = true; break; }
+              }
+              if (overlaps) {
+                searchFrom = termIdx + 1;
+                continue;
+              }
               for (let p = termIdx; p < endIdx; p++) covered.add(p);
               annotations.push({
                 term: inputText.slice(termIdx, endIdx),
                 simple, start: termIdx, end: endIdx,
                 url, medlineplus_summary: summary,
               });
+              placed = true;
             }
           }
         }
