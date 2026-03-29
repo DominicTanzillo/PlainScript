@@ -599,17 +599,19 @@ demo = gr.Interface(
     theme=gr.themes.Soft(),
 )
 
-# Add REST API routes via FastAPI (Gradio's underlying server)
-import json
+# Add REST API routes via Gradio's FastAPI app
+import json as json_module
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app = gr.routes.App.create_app(demo)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Use Gradio's blocks to register custom API routes BEFORE launch
+demo.launch(prevent_thread_lock=True)
+fastapi_app = demo.server.app
+fastapi_app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-@app.post("/api/simplify")
+@fastapi_app.post("/api/simplify")
 async def api_simplify(request: Request):
     data = await request.json()
     if not data or "text" not in data:
@@ -642,10 +644,12 @@ async def api_simplify(request: Request):
     })
 
 
-@app.get("/api/health")
+@fastapi_app.get("/api/health")
 async def api_health():
     return JSONResponse({"status": "ok", "model_loaded": True})
 
 
-if __name__ == "__main__":
-    demo.launch()
+# Keep server alive
+import time
+while True:
+    time.sleep(1)

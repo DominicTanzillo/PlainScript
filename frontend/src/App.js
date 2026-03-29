@@ -56,117 +56,15 @@ function App() {
     setResult(null);
 
     try {
-      if (API_BASE && API_BASE.includes('hf.space')) {
-        // HuggingFace Space: use Gradio API (SSE call pattern)
-        const callResp = await fetch(`${API_BASE}/gradio_api/call/simplify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: [inputText] }),
-        });
-        if (!callResp.ok) throw new Error('API error: ' + callResp.status);
-        const { event_id } = await callResp.json();
-
-        // Read the SSE stream
-        const resultResp = await fetch(`${API_BASE}/gradio_api/call/simplify/${event_id}`);
-        const reader = resultResp.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          fullText += decoder.decode(value, { stream: true });
-        }
-
-        // Parse SSE: find the "data:" line after "event: complete"
-        const sseLines = fullText.split('\n');
-        let plainLanguage = '';
-        let glossaryMd = '';
-        for (let i = 0; i < sseLines.length; i++) {
-          if (sseLines[i].startsWith('data:')) {
-            try {
-              const jsonStr = sseLines[i].replace(/^data:\s*/, '');
-              const parsed = JSON.parse(jsonStr);
-              if (Array.isArray(parsed)) {
-                plainLanguage = parsed[0] || '';
-                glossaryMd = parsed[1] || '';
-              }
-            } catch (e) {
-              // skip malformed lines
-            }
-          }
-        }
-
-        // Parse glossary markdown into annotations
-        const annotations = [];
-        const covered = new Set();
-        const blocks = glossaryMd.split('\n\n');
-        for (const block of blocks) {
-          if (!block.trim()) continue;
-          const termMatch = /\*\*(.+?)\*\*\s*--\s*(.+?)(?:\s{2}\n|\s{2}$|\n|$)/.exec(block);
-          if (termMatch) {
-            const term = termMatch[1];
-            const simple = termMatch[2].trim();
-            const urlMatch = /\[.*?\]\((.+?)\)/.exec(block);
-            const url = urlMatch ? urlMatch[1] : '';
-            const summaryMatch = /^>\s*(.+)/m.exec(block);
-            const summary = summaryMatch ? summaryMatch[1].trim() : '';
-            // Find term in input text with boundary checks
-            const inputLower = inputText.toLowerCase();
-            const termLower = term.toLowerCase();
-            const isShortAbbrev = term.length <= 3 && term === term.toUpperCase();
-            let searchFrom = 0;
-            let placed = false;
-            while (!placed && searchFrom < inputLower.length) {
-              const termIdx = inputLower.indexOf(termLower, searchFrom);
-              if (termIdx < 0) break;
-              const endIdx = termIdx + term.length;
-              // Check letter boundaries for short abbreviations (PO, IV, etc.)
-              if (isShortAbbrev) {
-                const charBefore = termIdx > 0 ? inputText[termIdx - 1] : ' ';
-                const charAfter = endIdx < inputText.length ? inputText[endIdx] : ' ';
-                if (/[A-Za-z]/.test(charBefore) || /[A-Za-z]/.test(charAfter)) {
-                  searchFrom = termIdx + 1;
-                  continue;
-                }
-              }
-              // Skip if overlaps with covered positions
-              let overlaps = false;
-              for (let p = termIdx; p < endIdx; p++) {
-                if (covered.has(p)) { overlaps = true; break; }
-              }
-              if (overlaps) {
-                searchFrom = termIdx + 1;
-                continue;
-              }
-              for (let p = termIdx; p < endIdx; p++) covered.add(p);
-              annotations.push({
-                term: inputText.slice(termIdx, endIdx),
-                simple, start: termIdx, end: endIdx,
-                url, medlineplus_summary: summary,
-              });
-              placed = true;
-            }
-          }
-        }
-        annotations.sort((a, b) => a.start - b.start);
-
-        setResult({
-          input: inputText,
-          plain_language: plainLanguage || 'Model is loading, please try again in a moment...',
-          source_annotations: annotations,
-          output_annotations: [],
-        });
-      } else {
-        // Local Flask server
-        const response = await fetch(`${API_BASE}/api/simplify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: inputText }),
-        });
-        if (!response.ok) throw new Error('API error: ' + response.status);
-        const data = await response.json();
-        setResult(data);
-      }
+      // Same endpoint for both local Flask and HF Space
+      const response = await fetch(`${API_BASE}/api/simplify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: inputText }),
+      });
+      if (!response.ok) throw new Error('API error: ' + response.status);
+      const data = await response.json();
+      setResult(data);
     } catch (err) {
       setError(err.message);
     } finally {
