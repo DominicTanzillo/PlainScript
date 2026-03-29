@@ -110,16 +110,26 @@ function App() {
             const url = urlMatch ? urlMatch[1] : '';
             const summaryMatch = /^>\s*(.+)/m.exec(block);
             const summary = summaryMatch ? summaryMatch[1].trim() : '';
-            // Find term in input text, skipping covered positions
+            // Find term in input text with boundary checks
             const inputLower = inputText.toLowerCase();
             const termLower = term.toLowerCase();
+            const isShortAbbrev = term.length <= 3 && term === term.toUpperCase();
             let searchFrom = 0;
             let placed = false;
             while (!placed && searchFrom < inputLower.length) {
               const termIdx = inputLower.indexOf(termLower, searchFrom);
               if (termIdx < 0) break;
               const endIdx = termIdx + term.length;
-              // Skip if overlaps with already-covered positions
+              // Check letter boundaries for short abbreviations (PO, IV, etc.)
+              if (isShortAbbrev) {
+                const charBefore = termIdx > 0 ? inputText[termIdx - 1] : ' ';
+                const charAfter = endIdx < inputText.length ? inputText[endIdx] : ' ';
+                if (/[A-Za-z]/.test(charBefore) || /[A-Za-z]/.test(charAfter)) {
+                  searchFrom = termIdx + 1;
+                  continue;
+                }
+              }
+              // Skip if overlaps with covered positions
               let overlaps = false;
               for (let p = termIdx; p < endIdx; p++) {
                 if (covered.has(p)) { overlaps = true; break; }
