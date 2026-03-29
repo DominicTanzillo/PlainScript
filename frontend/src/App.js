@@ -98,25 +98,38 @@ function App() {
 
         // Parse glossary markdown into annotations
         const annotations = [];
-        const linkRegex = /\[.*?\]\((.+?)\)/;
         const blocks = glossaryMd.split('\n\n');
         for (const block of blocks) {
-          const termMatch = /\*\*(.+?)\*\*\s*--\s*(.+?)(?:\s{2}\n|\n)/.exec(block);
+          if (!block.trim()) continue;
+          // Match **term** -- definition (with or without trailing link)
+          const termMatch = /\*\*(.+?)\*\*\s*--\s*(.+?)(?:\s{2}\n|\s{2}$|\n|$)/.exec(block);
           if (termMatch) {
             const term = termMatch[1];
             const simple = termMatch[2].trim();
-            const urlMatch = linkRegex.exec(block);
+            // Look for [text](url) link - may not exist for definition-only terms
+            const urlMatch = /\[.*?\]\((.+?)\)/.exec(block);
             const url = urlMatch ? urlMatch[1] : '';
             const summaryMatch = /^>\s*(.+)/m.exec(block);
             const summary = summaryMatch ? summaryMatch[1].trim() : '';
-            // Find term position in input text
-            const termIdx = inputText.toLowerCase().indexOf(term.toLowerCase());
+            // Find term position in input text (case-insensitive)
+            const termLower = term.toLowerCase();
+            const inputLower = inputText.toLowerCase();
+            let termIdx = inputLower.indexOf(termLower);
+            // For terms like POD1, also try with digits
+            if (termIdx < 0 && /^[A-Z]+$/.test(term)) {
+              const podMatch = new RegExp(term + '\\d', 'i').exec(inputText);
+              if (podMatch) termIdx = podMatch.index;
+            }
             if (termIdx >= 0) {
+              const matchLen = term.length;
+              // Check if actual text at position is longer (e.g., POD1 vs POD)
+              let endIdx = termIdx + matchLen;
+              while (endIdx < inputText.length && /\d/.test(inputText[endIdx])) endIdx++;
               annotations.push({
-                term: inputText.slice(termIdx, termIdx + term.length),
+                term: inputText.slice(termIdx, endIdx),
                 simple,
                 start: termIdx,
-                end: termIdx + term.length,
+                end: endIdx,
                 url,
                 medlineplus_summary: summary,
               });
